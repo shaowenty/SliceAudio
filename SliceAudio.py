@@ -1,3 +1,5 @@
+#!/usr/bin/python
+# -*- coding: UTF-8 -*-
 from pydub import AudioSegment
 import wave
 import struct
@@ -8,7 +10,7 @@ import json
 
 wave_temp_path = 'temp/temp.wav'  # 临时wav文件名称地址
 
-song = []
+song = {}
 
 
 def readMp3(filePath):
@@ -67,9 +69,16 @@ def analysisMp3(config):
         exit()
 
 
+def splice_float(f_str, n):
+    f_str = str(f_str)      # f_str = '{}'.format(f_str) 也可以转换为字符串
+    a, b, c = f_str.partition('.')
+    c = (c+"0"*n)[:n]       # 如论传入的函数有几位小数，在字符串后面都添加n为小数0
+    return b.join([a, c])
+
+
 def outputMp3(config):
     i = 0
-    time = []
+    time = {}
     silence_audio = AudioSegment.silent(duration=3000)
     fime_pre = 0
     while i < len(config['start_list']):
@@ -82,7 +91,7 @@ def outputMp3(config):
             i = len(config['start_list'])-1  # 修正最后一个
         end = config['end_list'][i]*config["perframeTime"]
         out = song[start:end]
-        time.append((end-start)/1000)
+        time[fime_pre] = splice_float((end-start)/1000+0.01, 2)
         if config['need_add_time']:
             if end-start < 3000:
                 out += silence_audio
@@ -93,7 +102,7 @@ def outputMp3(config):
 
 def writeFile(filePath, data):
     f = open(filePath, 'w')
-    f.write(json.dumps(data))
+    f.write(json.dumps(data,  indent=4))
     f.close
 
 
