@@ -54,7 +54,7 @@ def analysisMp3(config):
             cur_sart = -1
             cur_end_list.append(i)
         # 有开始 最后一帧位置
-        if i == numframes and high_count >= int(config["min_hight_frame_start"]) and cur_end == -1:
+        if i == numframes-1 and high_count >= int(config["min_hight_frame_start"]) and cur_end == -1:
             cur_end_list.append(i)
     perframeTime = song.duration_seconds / numframes * 1000  # 每帧时长
     config['start_list'] = cur_start_list
@@ -65,6 +65,8 @@ def analysisMp3(config):
     else:
         print('len(cur_end_list) != len(cur_start_list)',
               len(cur_end_list), len(cur_start_list))
+        writeFile('err/'+'cur_end_list'+'.txt', cur_end_list)
+        writeFile('err/'+'cur_start_list'+'.txt', cur_start_list)
         input()
         exit()
 
