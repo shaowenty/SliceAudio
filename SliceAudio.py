@@ -91,7 +91,7 @@ def outputMp3(config):
             i = len(config['start_list'])-1  # 修正最后一个
         end = config['end_list'][i]*config["perframeTime"]
         out = song[start:end]
-        time[fime_pre] = splice_float((end-start)/1000+0.01, 2)
+        time[fime_pre] = float(splice_float((end-start)/1000+0.01, 2))
         if config['need_add_time']:
             if end-start < 3000:
                 out += silence_audio
