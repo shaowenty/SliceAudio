@@ -6,100 +6,73 @@ import struct
 # from scipy import *
 from pylab import specgram, zeros, show
 import configparser
+import time
 import json
+import concurrent.futures
+import os
 
-wave_temp_path = 'temp/temp.wav'  # 临时wav文件名称地址
-
-song = {}
-
-
-def readMp3(filePath):
-    global song
-    song = AudioSegment.from_file(filePath, format="mp3")  # 读取文件
+THREAD_COUNT = os.cpu_count() * 5
 
 
-def analysisMp3(config):
-    song.export(wave_temp_path, 'wav')  # 生成临时 wav文件
-    wavefile = wave.open(wave_temp_path, 'r')  # 读取临时wav文件
-    numframes = wavefile.getnframes()  # 获取总帧数
+def readAudioFile(filePath, format="mp3"):
+    return AudioSegment.from_file(filePath, format=format)  # 读取文件
 
-    high_count = 0  # 高音谱计数
-    cur_sart = -1  # 开始位置
-    cur_end = -1
-    cur_start_list = []  # 记录开始位置
-    cur_end_list = []  # 记录结束位置
+
+def analysis(audio, config):
+    frame_count = int(audio.frame_count())
+    # 每帧时长  毫秒级 （duration_seconds 秒）
+    per_fram_time = audio.duration_seconds / frame_count * 1000
+    start = False
+    start_index = -1
+    hight_count = 0
     low_count = 0
-
-    for i in range(numframes):
-        val = wavefile.readframes(1)
-        left = val[0:2]  # 左声道
-# right = val[2:4]
+    time_config_list = []
+    count = 0
+    for i in range(0, frame_count):
+        value = audio.get_frame(i)
+        # 左声道
+        left = value[0:2]
         v = struct.unpack('h', left)[0]
-        v = abs(v)
-        if v > int(config["hight_frame"]):  # 坡度大于 hight_frame
-            high_count += 1
+        # 高帧
+        if v >= config['MIN_HEIGH']:
+            hight_count += 1
             low_count = 0
-            cur_end = -1
-            if cur_sart == -1:
-                cur_sart = i
-        if high_count == int(config["min_hight_frame_start"]):  # 数量达到10帧
-            high_count += 1
-            cur_start_list.append(cur_sart)
-        if v < int(config["hight_frame"])and cur_sart != -1:  # 有开始  并且 坡度小于 1000
-            low_count = low_count + 1
-        # 结束（用high_count标记是否有开始）
-        if low_count == int(config["min_low_frame_end"])and cur_end == -1 and high_count >= int(config["min_hight_frame_start"]):
-            high_count = 0
-            cur_end = i
-            cur_sart = -1
-            cur_end_list.append(i)
-        # 有开始 最后一帧位置
-        if i == numframes-1 and high_count >= int(config["min_hight_frame_start"]) and cur_end == -1:
-            cur_end_list.append(i)
-    perframeTime = song.duration_seconds / numframes * 1000  # 每帧时长
-    config['start_list'] = cur_start_list
-    config['end_list'] = cur_end_list
-    config['perframeTime'] = perframeTime
-    if len(cur_end_list) == len(cur_start_list):
-        return config
-    else:
-        print('len(cur_end_list) != len(cur_start_list)',
-              len(cur_end_list), len(cur_start_list))
-        writeFile('err/'+'cur_end_list'+'.txt', cur_end_list)
-        writeFile('err/'+'cur_start_list'+'.txt', cur_start_list)
-        input()
-        exit()
+            if start_index == -1:
+                start_index = i
+            # 连续 MIN_HIGHT_COUNT 高帧 开始
+            if hight_count == config['MIN_HIGHT_COUNT']:
+                start = True
+        # 低帧
+        else:
+            # 还没开始
+            if start == False:
+                start_index = -1
+                # 已经开始
+            else:
+                low_count += 1
+                # 连续MIN_LOW_COUNT低帧 结束
+                if low_count == config['MIN_LOW_COUNT']:
+                    time_config_list.append([
+                        per_fram_time * start_index,
+                        per_fram_time * i,
+                        count
+                    ])
+                    start_index = -1
+                    start = 0
+                    low_count = 0
+                    hight_count = 0
+                    count += 1
+    return time_config_list
 
 
-def splice_float(f_str, n):
-    f_str = str(f_str)      # f_str = '{}'.format(f_str) 也可以转换为字符串
-    a, b, c = f_str.partition('.')
-    c = (c+"0"*n)[:n]       # 如论传入的函数有几位小数，在字符串后面都添加n为小数0
-    return b.join([a, c])
+def outputTempMp3(_time):
+    outputMp3(audio, _time, config["TEMP_MP3_PATH"]+str(_time[2])+".mp3")
 
 
-def outputMp3(config):
-    i = 0
-    time = {}
-    silence_audio = AudioSegment.silent(duration=3000)
-    fime_pre = 0
-    while i < len(config['start_list']):
-        fime_pre = i
-        start = config['start_list'][i] * config["perframeTime"]
-        if config["del_data"]:
-            while i+1 in config["del_data"]:
-                i += 1
-        if i >= len(config['start_list']):
-            i = len(config['start_list'])-1  # 修正最后一个
-        end = config['end_list'][i]*config["perframeTime"]
-        out = song[start:end]
-        time[fime_pre] = float(splice_float((end-start)/1000+0.01, 2))
-        if config['need_add_time']:
-            if end-start < 3000:
-                out += silence_audio
-        out.export(config['outPath']+str(fime_pre)+'.mp3', format="mp3")
-        i += 1
-    return time
+def outputMp3(audio, time, path):
+    out = audio[time[0]:time[1]]
+    out.export(path, format="mp3")
+    return out
 
 
 def writeFile(filePath, data):
@@ -116,36 +89,65 @@ def readFile(filePath):
 
 
 if __name__ == "__main__":
-    mp3_path_origin = input("输入音频源地址：")
-    readMp3(mp3_path_origin)
-    temp = int(input('请输入 1（开始裁切） | 2（已裁切 修改配置文件）:'))
-    config = {}
-    if temp == 1:
-        # 读取配置文件
-        config = readFile('config.ini')
-        config = analysisMp3(config)
-
-        config['del_data'] = []
-        config['need_add_time'] = False
-        config['outPath'] = 'temp/'
-        outputMp3(config)  # 第一次生成 temp mp3
-        writeFile('config.ini', config)  # 保存一次config
-
+    # mp3_path_origin = input("输入音频源地址：")
+    # temp = int(input('请输入 1（开始裁切） | 2（已裁切 修改配置文件）:'))
     config = readFile('config.ini')
-    config['del_data'] = []
-    data = []
-    for i in range(len(config['start_list'])):
-        data.append(i)
-    writeFile('temp/slice.txt', data)
-    input('配置 temp/slice.txt 文件')
-    data = readFile('temp/slice.txt')
-    for i in range(len(config['start_list'])):
-        if i in data:
-            continue
-        else:
-            config['del_data'].append(i)
-    config['need_add_time'] = True
-    config['outPath'] = 'mp3/'
-    time = outputMp3(config)  # 第二次生成 temp mp3
-    writeFile('mp3/time.txt', time)
-    writeFile('config.ini', config)
+
+    audio = readAudioFile("PL2-1配音文稿.mp3")
+    duration_time = time.perf_counter()
+    time_config_list = analysis(audio, config)
+    duration_time = time.perf_counter()-duration_time
+    print(duration_time)
+    with concurrent.futures.ThreadPoolExecutor(THREAD_COUNT) as executor:
+        executor.map(outputTempMp3, time_config_list)
+    duration_time = time.perf_counter()-duration_time
+    print(duration_time)
+
+    # start_index = []
+    # end_index = []
+    # per_frame_thread = int(frame_count / THREAD_COUNT)
+    # duration_time = time.perf_counter()
+    # for start in range(0, frame_count, per_frame_thread):
+    #     start_index.append(start)
+    #     end_index.append(start+per_frame_thread)
+    # v = []
+    # v_temp = []
+    # print(time.perf_counter() - duration_time)
+    # with concurrent.futures.ThreadPoolExecutor(THREAD_COUNT) as executor:
+    #     for _v in executor.map(readAudioPerFrameV, start_index, end_index):
+    #         v += _v
+    #         v_temp.append(_v)
+    # duration_time = time.perf_counter()-duration_time
+    # print(duration_time)
+    # print('end')
+    # print(index_array)
+    # config = {}
+    # if temp == 1:
+    #     # 读取配置文件
+    #     config = readFile('config.ini')
+    #     config = analysisMp3(config)
+
+    #     config['del_data'] = []
+    #     config['need_add_time'] = False
+    #     config['outPath'] = 'temp/'
+    #     outputMp3(config)  # 第一次生成 temp mp3
+    #     writeFile('config.ini', config)  # 保存一次config
+
+    # config = readFile('config.ini')
+    # config['del_data'] = []
+    # data = []
+    # for i in range(len(config['start_list'])):
+    #     data.append(i)
+    # writeFile('temp/slice.txt', data)
+    # input('配置 temp/slice.txt 文件')
+    # data = readFile('temp/slice.txt')
+    # for i in range(len(config['start_list'])):
+    #     if i in data:
+    #         continue
+    #     else:
+    #         config['del_data'].append(i)
+    # config['need_add_time'] = True
+    # config['outPath'] = 'mp3/'
+    # time = outputMp3(config)  # 第二次生成 temp mp3
+    # writeFile('mp3/time.txt', time)
+    # writeFile('config.ini', config)
