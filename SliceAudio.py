@@ -37,8 +37,10 @@ def analysis(audio, config):
         value = audio.get_frame(i)
         # 左声道
         left = value[0:2]
-        v = struct.unpack('h', left)[0]
-        v = abs(v)
+        right = value[2:4]
+        vl = struct.unpack('h', left)[0]
+        vr = struct.unpack('h', right)[0]
+        v = max(abs(vl), abs(vr))
         # 高帧
         if v >= config['MIN_HEIGH']:
             hight_count += 1
@@ -72,6 +74,12 @@ def analysis(audio, config):
                     low_count = 0
                     hight_count = 0
                     count += 1
+    if start == True:
+        time_config_list.append([
+            per_fram_time * start_index,
+            per_fram_time * frame_count-1,
+            count
+        ])
     return time_config_list
 
 
