@@ -115,7 +115,7 @@ class SliceAudio:
         out_audio_list = []
         out_audio_path_list = []
         start_index = 0
-
+        fileName = ''
         for i in range(0, len(config_list)):
             if config_list[i] in audio_path_list:
                 j = start_index
@@ -166,6 +166,7 @@ class SliceAudio:
         # 检测 TEMP_PATH 文件夹
         export_path = config["TEMP_PATH"] or "temp/"
         Tool.delFolder(export_path)
+        time.sleep(0.1)
         os.mkdir(export_path)
         export_path += "mp3/"
         os.mkdir(export_path)
@@ -180,12 +181,15 @@ class SliceAudio:
         mp3_file_list = Tool.readFileListWithSuffix(temp_path+"mp3")
         Tool.exportJsonData(temp_path+'config.json', mp3_file_list)
 
+        input('配置配置文件 config config.json')
+        Tool.logTime("read config.json")
+
+        mp3_file_list = Tool.readFileListWithSuffix(temp_path+"mp3")
+        Tool.exportJsonData(temp_path+'config.json', mp3_file_list)
+
         audio_list = self.readAudidWithList(
             temp_path+"mp3/", mp3_file_list)
         Tool.logTime("read audio")
-
-        input('配置配置文件 config config.json')
-        Tool.logTime("read config.json")
 
         config_list = Tool.importJsonData(temp_path+'config.json')
         self.mergeAudioWithConfig(
