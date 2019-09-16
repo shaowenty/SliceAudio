@@ -30,6 +30,11 @@ class Tool:
     @classmethod  # 删除文件夹
     def delFolder(self, folderPath):
         if os.path.exists(folderPath) and os.path.isdir(folderPath):
+            dirlist = os.listdir(folderPath)
+            for dir in dirlist:
+                if os.path.isdir(dir):
+                    self.delFolder(dir)
+            time.sleep(0.001)
             shutil.rmtree(folderPath)
 
     @classmethod

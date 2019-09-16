@@ -126,6 +126,7 @@ class SliceAudio:
                     out_audio += audio_list[m]
                 # 修正空音
                 slice_list = self.analysis(audio_list[j], config)
+                print(j, " ", len(audio_list))
                 if j != start_index:
                     out_audio += audio_list[j][0:slice_list[len(
                         slice_list)-1]['end']]
@@ -133,7 +134,7 @@ class SliceAudio:
                     out_audio = audio_list[j][0:slice_list[len(
                         slice_list)-1]['end']]
 
-                time_list.append(out_audio.duration_seconds)
+                time_list.append(round(out_audio.duration_seconds + 0.01, 2))
 
                 if out_audio.duration_seconds < config["MIN_AUDIO_TIME"]:
                     out_audio += silence_audio
@@ -147,7 +148,7 @@ class SliceAudio:
                 count = 0
 
         Tool.delFolder(out_put_path)
-        time.sleep(0.1)
+        time.sleep(0.001)
         os.makedirs(out_put_path, mode=0o777, exist_ok=True)
         with concurrent.futures.ThreadPoolExecutor(THREAD_COUNT) as executor:
             executor.map(self.exportMp3, out_audio_list, out_audio_path_list)
@@ -185,10 +186,9 @@ class SliceAudio:
         Tool.logTime("read config.json")
 
         mp3_file_list = Tool.readFileListWithSuffix(temp_path+"mp3")
-        Tool.exportJsonData(temp_path+'config.json', mp3_file_list)
-
         audio_list = self.readAudidWithList(
             temp_path+"mp3/", mp3_file_list)
+
         Tool.logTime("read audio")
 
         config_list = Tool.importJsonData(temp_path+'config.json')
